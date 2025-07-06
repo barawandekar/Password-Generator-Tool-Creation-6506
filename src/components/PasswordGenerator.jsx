@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiCopy, FiRefreshCw, FiCheck, FiEye, FiEyeOff, FiLock, FiPlus, FiX, FiType, FiKey, FiEdit3 } from 'react-icons/fi';
+import { FiCopy, FiRefreshCw, FiCheck, FiEye, FiEyeOff, FiLock, FiPlus, FiX, FiType, FiKey, FiEdit3, FiHash } from 'react-icons/fi';
 
 const PasswordGenerator = () => {
   const [password, setPassword] = useState('');
@@ -12,6 +12,17 @@ const PasswordGenerator = () => {
     numbers: true,
     symbols: true,
     customSymbols: false
+  });
+  const [symbolOptions, setSymbolOptions] = useState({
+    useDefault: true,
+    useCustom: false
+  });
+  const [minCounts, setMinCounts] = useState({
+    uppercase: 1,
+    lowercase: 1,
+    numbers: 1,
+    symbols: 1,
+    customSymbols: 1
   });
   const [passphraseOptions, setPassphraseOptions] = useState({
     wordCount: 4,
@@ -28,6 +39,7 @@ const PasswordGenerator = () => {
   const [customSymbols, setCustomSymbols] = useState('');
   const [showCustomSymbolInput, setShowCustomSymbolInput] = useState(false);
   const [showCustomSeparatorInput, setShowCustomSeparatorInput] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const defaultSymbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
   
@@ -42,28 +54,120 @@ const PasswordGenerator = () => {
     'quiet', 'royal', 'star', 'truth', 'unique', 'voice', 'wisdom', 'youth'
   ];
 
+  // Function to get character type for styling
+  const getCharacterType = (char) => {
+    if (/[A-Z]/.test(char)) return 'uppercase';
+    if (/[0-9]/.test(char)) return 'number';
+    if (defaultSymbols.includes(char)) return 'default-symbol';
+    if (customSymbols.includes(char)) return 'custom-symbol';
+    return 'lowercase';
+  };
+
+  // Function to get color class based on character type
+  const getCharacterColor = (type) => {
+    switch (type) {
+      case 'uppercase': return 'text-blue-600';
+      case 'number': return 'text-green-600';
+      case 'default-symbol': return 'text-red-600';
+      case 'custom-symbol': return 'text-purple-600';
+      default: return 'text-gray-800';
+    }
+  };
+
+  // Function to render colored password
+  const renderColoredPassword = (passwordText) => {
+    if (!passwordText) return '';
+    
+    return passwordText.split('').map((char, index) => {
+      const type = getCharacterType(char);
+      const colorClass = getCharacterColor(type);
+      
+      return (
+        <span key={index} className={colorClass}>
+          {char}
+        </span>
+      );
+    });
+  };
+
   const generatePassword = () => {
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
+    const defaultSymbolsChars = defaultSymbols;
+    const customSymbolsChars = customSymbols;
 
-    let chars = '';
-    if (options.lowercase) chars += lowercase;
-    if (options.uppercase) chars += uppercase;
-    if (options.numbers) chars += numbers;
-    if (options.symbols) chars += defaultSymbols;
-    if (options.customSymbols && customSymbols) chars += customSymbols;
+    // Build character sets and their minimum requirements
+    const charSets = [];
+    const requiredChars = [];
 
-    if (chars === '') {
+    if (options.uppercase) {
+      charSets.push({ chars: uppercase, min: minCounts.uppercase, type: 'uppercase' });
+    }
+    if (options.lowercase) {
+      charSets.push({ chars: lowercase, min: minCounts.lowercase, type: 'lowercase' });
+    }
+    if (options.numbers) {
+      charSets.push({ chars: numbers, min: minCounts.numbers, type: 'numbers' });
+    }
+    
+    // Handle symbols based on selection
+    if (options.symbols) {
+      let symbolChars = '';
+      let symbolMin = 0;
+      
+      if (symbolOptions.useDefault) {
+        symbolChars += defaultSymbolsChars;
+        symbolMin += minCounts.symbols;
+      }
+      
+      if (symbolOptions.useCustom && customSymbolsChars) {
+        symbolChars += customSymbolsChars;
+        symbolMin += minCounts.customSymbols;
+      }
+      
+      if (symbolChars) {
+        charSets.push({ chars: symbolChars, min: symbolMin, type: 'symbols' });
+      }
+    }
+
+    if (charSets.length === 0) {
       setPassword('');
       return;
     }
 
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Calculate total minimum characters needed
+    const totalMinChars = charSets.reduce((sum, set) => sum + set.min, 0);
+    
+    if (totalMinChars > length) {
+      setPassword('');
+      return;
     }
-    setPassword(result);
+
+    // Generate required minimum characters for each type
+    for (const set of charSets) {
+      for (let i = 0; i < set.min; i++) {
+        const randomChar = set.chars.charAt(Math.floor(Math.random() * set.chars.length));
+        requiredChars.push(randomChar);
+      }
+    }
+
+    // Fill remaining length with random characters from all available sets
+    const allChars = charSets.map(set => set.chars).join('');
+    const remainingLength = length - requiredChars.length;
+    
+    for (let i = 0; i < remainingLength; i++) {
+      const randomChar = allChars.charAt(Math.floor(Math.random() * allChars.length));
+      requiredChars.push(randomChar);
+    }
+
+    // Shuffle the array to randomize character positions
+    for (let i = requiredChars.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [requiredChars[i], requiredChars[j]] = [requiredChars[j], requiredChars[i]];
+    }
+
+    setPassword(requiredChars.join(''));
   };
 
   const getCurrentSeparator = () => {
@@ -220,6 +324,20 @@ const PasswordGenerator = () => {
     }));
   };
 
+  const handleSymbolOptionChange = (option) => {
+    setSymbolOptions(prev => ({
+      ...prev,
+      [option]: !prev[option]
+    }));
+  };
+
+  const handleMinCountChange = (type, value) => {
+    setMinCounts(prev => ({
+      ...prev,
+      [type]: value
+    }));
+  };
+
   const handlePassphraseOptionChange = (option, value) => {
     setPassphraseOptions(prev => ({
       ...prev,
@@ -247,12 +365,45 @@ const PasswordGenerator = () => {
     handlePassphraseOptionChange('customSeparator', '');
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    setIsRefreshing(true);
+    
+    // Add a small delay for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
     if (generationType === 'password') {
       generatePassword();
     } else {
       generatePassphrase();
     }
+    
+    setIsRefreshing(false);
+  };
+
+  const getMaxMinCount = (type) => {
+    const enabledTypes = Object.keys(options).filter(key => {
+      if (key === 'symbols') {
+        return options[key] && (symbolOptions.useDefault || (symbolOptions.useCustom && customSymbols.length > 0));
+      }
+      return options[key];
+    });
+    
+    if (enabledTypes.length === 0) return 1;
+    
+    const maxPossible = Math.floor(length / enabledTypes.length);
+    return Math.max(1, Math.min(maxPossible, Math.floor(length * 0.8)));
+  };
+
+  const getTotalMinCount = () => {
+    let total = 0;
+    if (options.uppercase) total += minCounts.uppercase;
+    if (options.lowercase) total += minCounts.lowercase;
+    if (options.numbers) total += minCounts.numbers;
+    if (options.symbols) {
+      if (symbolOptions.useDefault) total += minCounts.symbols;
+      if (symbolOptions.useCustom && customSymbols.length > 0) total += minCounts.customSymbols;
+    }
+    return total;
   };
 
   const getMaxMinNumbers = () => {
@@ -270,11 +421,37 @@ const PasswordGenerator = () => {
     return { difference, accuracy };
   };
 
+  // Auto-adjust min counts when length changes
+  useEffect(() => {
+    const totalMin = getTotalMinCount();
+    if (totalMin > length) {
+      const enabledTypes = Object.keys(options).filter(key => {
+        if (key === 'symbols') {
+          return options[key] && (symbolOptions.useDefault || (symbolOptions.useCustom && customSymbols.length > 0));
+        }
+        return options[key];
+      });
+      
+      const newMinCount = Math.max(1, Math.floor(length / enabledTypes.length));
+      
+      setMinCounts(prev => ({
+        ...prev,
+        uppercase: options.uppercase ? newMinCount : prev.uppercase,
+        lowercase: options.lowercase ? newMinCount : prev.lowercase,
+        numbers: options.numbers ? newMinCount : prev.numbers,
+        symbols: (options.symbols && symbolOptions.useDefault) ? newMinCount : prev.symbols,
+        customSymbols: (options.symbols && symbolOptions.useCustom && customSymbols.length > 0) ? newMinCount : prev.customSymbols
+      }));
+    }
+  }, [length, options, symbolOptions, customSymbols]);
+
   useEffect(() => {
     handleGenerate();
-  }, [length, options, customSymbols, generationType, passphraseOptions]);
+  }, [length, options, symbolOptions, minCounts, customSymbols, generationType, passphraseOptions]);
 
   const targetAccuracy = getTargetLengthAccuracy();
+  const totalMinCount = getTotalMinCount();
+  const isMinCountValid = totalMinCount <= length;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -318,18 +495,39 @@ const PasswordGenerator = () => {
           <div className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex-1 mr-4">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  readOnly
-                  className="w-full bg-transparent text-lg font-mono text-gray-800 focus:outline-none"
-                  placeholder={`Generated ${generationType} will appear here`}
-                />
+                {showPassword ? (
+                  <div className="w-full text-lg font-mono break-all leading-relaxed">
+                    {password ? renderColoredPassword(password) : (
+                      <span className="text-gray-500">
+                        Generated {generationType} will appear here
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="password"
+                    value={password}
+                    readOnly
+                    className="w-full bg-transparent text-lg font-mono text-gray-800 focus:outline-none"
+                    placeholder={`Generated ${generationType} will appear here`}
+                  />
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 <button
+                  onClick={handleGenerate}
+                  disabled={isRefreshing}
+                  className={`p-2 text-gray-500 hover:text-indigo-600 transition-all duration-200 ${
+                    isRefreshing ? 'animate-spin' : 'hover:scale-110'
+                  }`}
+                  title="Generate new password"
+                >
+                  <FiRefreshCw className="w-5 h-5" />
+                </button>
+                <button
                   onClick={() => setShowPassword(!showPassword)}
                   className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
                     <FiEyeOff className="w-5 h-5" />
@@ -340,6 +538,7 @@ const PasswordGenerator = () => {
                 <button
                   onClick={copyToClipboard}
                   className="p-2 text-gray-500 hover:text-indigo-600 transition-colors"
+                  title="Copy to clipboard"
                 >
                   {copied ? (
                     <FiCheck className="w-5 h-5 text-green-500" />
@@ -351,6 +550,39 @@ const PasswordGenerator = () => {
             </div>
           </div>
         </div>
+
+        {/* Color Legend for Passwords */}
+        {generationType === 'password' && password && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Character Color Guide</h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="text-blue-600 font-mono font-bold">A</span>
+                <span className="text-gray-600">Uppercase</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-800 font-mono font-bold">a</span>
+                <span className="text-gray-600">Lowercase</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-green-600 font-mono font-bold">1</span>
+                <span className="text-gray-600">Numbers</span>
+              </div>
+              {symbolOptions.useDefault && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-red-600 font-mono font-bold">!</span>
+                  <span className="text-gray-600">Default Symbols</span>
+                </div>
+              )}
+              {symbolOptions.useCustom && customSymbols && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-purple-600 font-mono font-bold">{customSymbols.charAt(0)}</span>
+                  <span className="text-gray-600">Custom Symbols</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Password Options */}
         {generationType === 'password' && (
@@ -382,118 +614,345 @@ const PasswordGenerator = () => {
               </div>
             </div>
 
+            {/* Min Count Warning */}
+            {!isMinCountValid && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <FiX className="w-5 h-5 text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-red-700">
+                      Minimum count too high
+                    </p>
+                    <p className="text-xs text-red-600 mt-1">
+                      Total minimum characters ({totalMinCount}) exceeds password length ({length})
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="mb-8">
               <h3 className="text-sm font-medium text-gray-700 mb-4">
                 Character Options
               </h3>
-              <div className="space-y-4">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.uppercase}
-                    onChange={() => handleOptionChange('uppercase')}
-                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">
-                    Uppercase Letters (A-Z)
-                  </span>
-                </label>
-
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.lowercase}
-                    onChange={() => handleOptionChange('lowercase')}
-                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">
-                    Lowercase Letters (a-z)
-                  </span>
-                </label>
-
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.numbers}
-                    onChange={() => handleOptionChange('numbers')}
-                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">
-                    Numbers (0-9)
-                  </span>
-                </label>
-
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.symbols}
-                    onChange={() => handleOptionChange('symbols')}
-                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">
-                    Default Symbols (!@#$%^&*...)
-                  </span>
-                </label>
-
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={options.customSymbols}
-                        onChange={() => handleOptionChange('customSymbols')}
-                        className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                      />
-                      <span className="ml-3 text-sm text-gray-700">
-                        Custom Symbols
-                      </span>
-                    </label>
-                    <button
-                      onClick={() => setShowCustomSymbolInput(!showCustomSymbolInput)}
-                      className="text-indigo-600 hover:text-indigo-700 transition-colors"
-                    >
-                      {showCustomSymbolInput ? (
-                        <FiX className="w-4 h-4" />
-                      ) : (
-                        <FiPlus className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-
-                  {showCustomSymbolInput && (
+              <div className="space-y-6">
+                {/* Uppercase */}
+                <div className="space-y-3">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={options.uppercase}
+                      onChange={() => handleOptionChange('uppercase')}
+                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                    />
+                    <span className="ml-3 text-sm text-gray-700">
+                      Uppercase Letters (A-Z) <span className="text-blue-600 font-mono">ABC</span>
+                    </span>
+                  </label>
+                  {options.uppercase && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="space-y-3"
+                      className="ml-7 space-y-2"
                     >
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="text"
-                          value={customSymbols}
-                          onChange={handleCustomSymbolsChange}
-                          placeholder="Enter custom symbols..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                        />
-                        <button
-                          onClick={clearCustomSymbols}
-                          className="px-3 py-2 text-gray-500 hover:text-red-500 transition-colors"
-                          title="Clear custom symbols"
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-600 flex items-center">
+                          <FiHash className="w-3 h-3 mr-1" />
+                          Minimum Count
+                        </label>
+                        <span className="text-sm font-semibold text-indigo-600">{minCounts.uppercase}</span>
                       </div>
-
-                      {customSymbols && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <p className="text-xs text-blue-700 mb-1">Custom symbols:</p>
-                          <p className="text-sm font-mono text-blue-800 break-all">
-                            {customSymbols}
-                          </p>
-                        </div>
-                      )}
+                      <input
+                        type="range"
+                        min="1"
+                        max={getMaxMinCount('uppercase')}
+                        value={minCounts.uppercase}
+                        onChange={(e) => handleMinCountChange('uppercase', parseInt(e.target.value))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>1</span>
+                        <span>{getMaxMinCount('uppercase')}</span>
+                      </div>
                     </motion.div>
                   )}
+                </div>
+
+                {/* Lowercase */}
+                <div className="space-y-3">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={options.lowercase}
+                      onChange={() => handleOptionChange('lowercase')}
+                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                    />
+                    <span className="ml-3 text-sm text-gray-700">
+                      Lowercase Letters (a-z) <span className="text-gray-800 font-mono">abc</span>
+                    </span>
+                  </label>
+                  {options.lowercase && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="ml-7 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-600 flex items-center">
+                          <FiHash className="w-3 h-3 mr-1" />
+                          Minimum Count
+                        </label>
+                        <span className="text-sm font-semibold text-indigo-600">{minCounts.lowercase}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max={getMaxMinCount('lowercase')}
+                        value={minCounts.lowercase}
+                        onChange={(e) => handleMinCountChange('lowercase', parseInt(e.target.value))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>1</span>
+                        <span>{getMaxMinCount('lowercase')}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Numbers */}
+                <div className="space-y-3">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={options.numbers}
+                      onChange={() => handleOptionChange('numbers')}
+                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                    />
+                    <span className="ml-3 text-sm text-gray-700">
+                      Numbers (0-9) <span className="text-green-600 font-mono">123</span>
+                    </span>
+                  </label>
+                  {options.numbers && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="ml-7 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-600 flex items-center">
+                          <FiHash className="w-3 h-3 mr-1" />
+                          Minimum Count
+                        </label>
+                        <span className="text-sm font-semibold text-indigo-600">{minCounts.numbers}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max={getMaxMinCount('numbers')}
+                        value={minCounts.numbers}
+                        onChange={(e) => handleMinCountChange('numbers', parseInt(e.target.value))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>1</span>
+                        <span>{getMaxMinCount('numbers')}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Symbols Section */}
+                <div className="space-y-3 border-t pt-4">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={options.symbols}
+                      onChange={() => handleOptionChange('symbols')}
+                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                    />
+                    <span className="ml-3 text-sm text-gray-700">
+                      Include Symbols
+                    </span>
+                  </label>
+
+                  {options.symbols && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="ml-7 space-y-4"
+                    >
+                      {/* Symbol Type Selection */}
+                      <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                        <h4 className="text-sm font-medium text-gray-700">Symbol Types</h4>
+                        
+                        {/* Default Symbols */}
+                        <div className="space-y-3">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={symbolOptions.useDefault}
+                              onChange={() => handleSymbolOptionChange('useDefault')}
+                              className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                            />
+                            <span className="ml-3 text-sm text-gray-700">
+                              Default Symbols (!@#$%^&*...) <span className="text-red-600 font-mono">!@#</span>
+                            </span>
+                          </label>
+
+                          {symbolOptions.useDefault && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="ml-7 space-y-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-medium text-gray-600 flex items-center">
+                                  <FiHash className="w-3 h-3 mr-1" />
+                                  Minimum Count
+                                </label>
+                                <span className="text-sm font-semibold text-indigo-600">{minCounts.symbols}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1"
+                                max={getMaxMinCount('symbols')}
+                                value={minCounts.symbols}
+                                onChange={(e) => handleMinCountChange('symbols', parseInt(e.target.value))}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>1</span>
+                                <span>{getMaxMinCount('symbols')}</span>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {/* Custom Symbols */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={symbolOptions.useCustom}
+                                onChange={() => handleSymbolOptionChange('useCustom')}
+                                className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                              />
+                              <span className="ml-3 text-sm text-gray-700">
+                                Custom Symbols {customSymbols && <span className="text-purple-600 font-mono">{customSymbols.slice(0, 3)}</span>}
+                              </span>
+                            </label>
+                            <button
+                              onClick={() => setShowCustomSymbolInput(!showCustomSymbolInput)}
+                              className="text-indigo-600 hover:text-indigo-700 transition-colors"
+                            >
+                              {showCustomSymbolInput ? (
+                                <FiX className="w-4 h-4" />
+                              ) : (
+                                <FiPlus className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+
+                          {showCustomSymbolInput && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="space-y-3"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="text"
+                                  value={customSymbols}
+                                  onChange={handleCustomSymbolsChange}
+                                  placeholder="Enter custom symbols..."
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                />
+                                <button
+                                  onClick={clearCustomSymbols}
+                                  className="px-3 py-2 text-gray-500 hover:text-red-500 transition-colors"
+                                  title="Clear custom symbols"
+                                >
+                                  <FiX className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {customSymbols && (
+                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                  <p className="text-xs text-blue-700 mb-1">Custom symbols:</p>
+                                  <p className="text-sm font-mono text-blue-800 break-all">
+                                    {customSymbols}
+                                  </p>
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+
+                          {/* Custom Symbols Minimum Count */}
+                          {symbolOptions.useCustom && customSymbols.length > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="ml-7 space-y-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-medium text-gray-600 flex items-center">
+                                  <FiHash className="w-3 h-3 mr-1" />
+                                  Minimum Count
+                                </label>
+                                <span className="text-sm font-semibold text-indigo-600">{minCounts.customSymbols}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1"
+                                max={getMaxMinCount('customSymbols')}
+                                value={minCounts.customSymbols}
+                                onChange={(e) => handleMinCountChange('customSymbols', parseInt(e.target.value))}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>1</span>
+                                <span>{getMaxMinCount('customSymbols')}</span>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Character Count Summary */}
+            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Character Requirements</h4>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Length:</span>
+                  <span className="font-mono font-medium">{length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Min Required:</span>
+                  <span className={`font-mono font-medium ${!isMinCountValid ? 'text-red-500' : 'text-green-600'}`}>
+                    {totalMinCount}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Remaining:</span>
+                  <span className="font-mono font-medium">{Math.max(0, length - totalMinCount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Random Fill:</span>
+                  <span className="font-mono font-medium">{Math.max(0, length - totalMinCount)}</span>
                 </div>
               </div>
             </div>
@@ -752,9 +1211,12 @@ const PasswordGenerator = () => {
 
         <button
           onClick={handleGenerate}
-          className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2"
+          disabled={isRefreshing || !isMinCountValid}
+          className={`w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2 ${
+            isRefreshing || !isMinCountValid ? 'opacity-75 cursor-not-allowed' : 'hover:scale-105'
+          }`}
         >
-          <FiRefreshCw className="w-5 h-5" />
+          <FiRefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
           <span>Generate New {generationType === 'password' ? 'Password' : 'Passphrase'}</span>
         </button>
 
