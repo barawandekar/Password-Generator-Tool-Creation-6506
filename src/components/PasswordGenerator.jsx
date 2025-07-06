@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiCopy, FiRefreshCw, FiCheck, FiEye, FiEyeOff, FiLock, FiPlus, FiX, FiType, FiKey, FiEdit3, FiHash } from 'react-icons/fi';
+import { FiCopy, FiRefreshCw, FiCheck, FiEye, FiEyeOff, FiLock, FiPlus, FiX, FiType, FiKey, FiEdit3, FiHash, FiShield, FiAlertTriangle, FiClock, FiCpu } from 'react-icons/fi';
 
 const PasswordGenerator = () => {
   const [password, setPassword] = useState('');
@@ -42,7 +42,7 @@ const PasswordGenerator = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const defaultSymbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-  
+
   // Common word list for passphrases
   const wordList = [
     'apple', 'banana', 'cherry', 'dragon', 'elephant', 'falcon', 'guitar', 'harbor',
@@ -53,6 +53,163 @@ const PasswordGenerator = () => {
     'golden', 'honest', 'journey', 'kindness', 'light', 'moon', 'noble', 'peace',
     'quiet', 'royal', 'star', 'truth', 'unique', 'voice', 'wisdom', 'youth'
   ];
+
+  // Calculate password entropy and crack time
+  const calculateEntropy = (passwordText) => {
+    if (!passwordText) return { entropy: 0, crackTime: 0, timeString: 'N/A' };
+
+    let charsetSize = 0;
+    
+    // Determine character set size
+    if (/[a-z]/.test(passwordText)) charsetSize += 26; // lowercase
+    if (/[A-Z]/.test(passwordText)) charsetSize += 26; // uppercase
+    if (/[0-9]/.test(passwordText)) charsetSize += 10; // numbers
+    if (/[^A-Za-z0-9]/.test(passwordText)) {
+      // Count unique symbols
+      const symbols = passwordText.match(/[^A-Za-z0-9]/g) || [];
+      const uniqueSymbols = new Set(symbols).size;
+      charsetSize += Math.max(uniqueSymbols, 32); // Assume at least 32 common symbols
+    }
+
+    // Calculate entropy in bits
+    const entropy = Math.log2(Math.pow(charsetSize, passwordText.length));
+    
+    // Calculate crack time (assume 1 billion guesses per second)
+    const guessesPerSecond = 1e9;
+    const totalCombinations = Math.pow(charsetSize, passwordText.length);
+    const averageGuesses = totalCombinations / 2; // On average, password found halfway through
+    const crackTimeSeconds = averageGuesses / guessesPerSecond;
+    
+    return {
+      entropy: Math.round(entropy * 10) / 10,
+      crackTime: crackTimeSeconds,
+      timeString: formatCrackTime(crackTimeSeconds),
+      charsetSize
+    };
+  };
+
+  // Format crack time into human-readable string
+  const formatCrackTime = (seconds) => {
+    if (seconds < 1) return 'Instant';
+    if (seconds < 60) return `${Math.round(seconds)} seconds`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)} minutes`;
+    if (seconds < 86400) return `${Math.round(seconds / 3600)} hours`;
+    if (seconds < 31536000) return `${Math.round(seconds / 86400)} days`;
+    if (seconds < 31536000000) return `${Math.round(seconds / 31536000)} years`;
+    if (seconds < 31536000000000) return `${Math.round(seconds / 31536000000)} thousand years`;
+    if (seconds < 31536000000000000) return `${Math.round(seconds / 31536000000000)} million years`;
+    if (seconds < 31536000000000000000) return `${Math.round(seconds / 31536000000000000)} billion years`;
+    return `${Math.round(seconds / 31536000000000000000)} trillion years`;
+  };
+
+  // Get crack time color based on security level
+  const getCrackTimeColor = (seconds) => {
+    if (seconds < 86400) return 'text-red-600'; // Less than 1 day
+    if (seconds < 31536000) return 'text-orange-600'; // Less than 1 year
+    if (seconds < 31536000000) return 'text-yellow-600'; // Less than 1000 years
+    if (seconds < 31536000000000000) return 'text-blue-600'; // Less than 1 million years
+    return 'text-green-600'; // Very secure
+  };
+
+  // Password strength calculation
+  const calculatePasswordStrength = (passwordText) => {
+    if (!passwordText) return { score: 0, level: 'None', feedback: 'No password generated' };
+
+    let score = 0;
+    const checks = {
+      length: false,
+      uppercase: false,
+      lowercase: false,
+      numbers: false,
+      symbols: false,
+      variety: false,
+      entropy: false
+    };
+
+    // Length check
+    if (passwordText.length >= 12) {
+      score += 20;
+      checks.length = true;
+    } else if (passwordText.length >= 8) {
+      score += 10;
+    }
+
+    // Character type checks
+    if (/[A-Z]/.test(passwordText)) {
+      score += 15;
+      checks.uppercase = true;
+    }
+    if (/[a-z]/.test(passwordText)) {
+      score += 15;
+      checks.lowercase = true;
+    }
+    if (/[0-9]/.test(passwordText)) {
+      score += 15;
+      checks.numbers = true;
+    }
+    if (/[^A-Za-z0-9]/.test(passwordText)) {
+      score += 15;
+      checks.symbols = true;
+    }
+
+    // Variety check (at least 3 different character types)
+    const typeCount = [checks.uppercase, checks.lowercase, checks.numbers, checks.symbols].filter(Boolean).length;
+    if (typeCount >= 3) {
+      score += 10;
+      checks.variety = true;
+    }
+
+    // Entropy check (no repeated patterns)
+    const uniqueChars = new Set(passwordText).size;
+    const entropyRatio = uniqueChars / passwordText.length;
+    if (entropyRatio > 0.6) {
+      score += 10;
+      checks.entropy = true;
+    }
+
+    // Determine strength level
+    let level, color, bgColor;
+    if (score >= 80) {
+      level = 'Very Strong';
+      color = 'text-green-700';
+      bgColor = 'bg-green-100';
+    } else if (score >= 60) {
+      level = 'Strong';
+      color = 'text-blue-700';
+      bgColor = 'bg-blue-100';
+    } else if (score >= 40) {
+      level = 'Moderate';
+      color = 'text-yellow-700';
+      bgColor = 'bg-yellow-100';
+    } else if (score >= 20) {
+      level = 'Weak';
+      color = 'text-orange-700';
+      bgColor = 'bg-orange-100';
+    } else {
+      level = 'Very Weak';
+      color = 'text-red-700';
+      bgColor = 'bg-red-100';
+    }
+
+    // Generate feedback
+    const feedback = [];
+    if (!checks.length) feedback.push('Use at least 12 characters');
+    if (!checks.uppercase) feedback.push('Add uppercase letters');
+    if (!checks.lowercase) feedback.push('Add lowercase letters');
+    if (!checks.numbers) feedback.push('Include numbers');
+    if (!checks.symbols) feedback.push('Include symbols');
+    if (!checks.variety) feedback.push('Use more character types');
+    if (!checks.entropy) feedback.push('Avoid repeated patterns');
+
+    return {
+      score: Math.min(100, score),
+      level,
+      color,
+      bgColor,
+      feedback: feedback.length > 0 ? feedback : ['Excellent password strength!'],
+      checks
+    };
+  };
 
   // Function to get character type for styling
   const getCharacterType = (char) => {
@@ -77,11 +234,9 @@ const PasswordGenerator = () => {
   // Function to render colored password
   const renderColoredPassword = (passwordText) => {
     if (!passwordText) return '';
-    
     return passwordText.split('').map((char, index) => {
       const type = getCharacterType(char);
       const colorClass = getCharacterColor(type);
-      
       return (
         <span key={index} className={colorClass}>
           {char}
@@ -110,22 +265,21 @@ const PasswordGenerator = () => {
     if (options.numbers) {
       charSets.push({ chars: numbers, min: minCounts.numbers, type: 'numbers' });
     }
-    
+
     // Handle symbols based on selection
     if (options.symbols) {
       let symbolChars = '';
       let symbolMin = 0;
-      
+
       if (symbolOptions.useDefault) {
         symbolChars += defaultSymbolsChars;
         symbolMin += minCounts.symbols;
       }
-      
       if (symbolOptions.useCustom && customSymbolsChars) {
         symbolChars += customSymbolsChars;
         symbolMin += minCounts.customSymbols;
       }
-      
+
       if (symbolChars) {
         charSets.push({ chars: symbolChars, min: symbolMin, type: 'symbols' });
       }
@@ -138,7 +292,6 @@ const PasswordGenerator = () => {
 
     // Calculate total minimum characters needed
     const totalMinChars = charSets.reduce((sum, set) => sum + set.min, 0);
-    
     if (totalMinChars > length) {
       setPassword('');
       return;
@@ -155,7 +308,6 @@ const PasswordGenerator = () => {
     // Fill remaining length with random characters from all available sets
     const allChars = charSets.map(set => set.chars).join('');
     const remainingLength = length - requiredChars.length;
-    
     for (let i = 0; i < remainingLength; i++) {
       const randomChar = allChars.charAt(Math.floor(Math.random() * allChars.length));
       requiredChars.push(randomChar);
@@ -171,101 +323,90 @@ const PasswordGenerator = () => {
   };
 
   const getCurrentSeparator = () => {
-    return passphraseOptions.separator === 'custom' 
-      ? passphraseOptions.customSeparator 
-      : passphraseOptions.separator;
+    return passphraseOptions.separator === 'custom' ? passphraseOptions.customSeparator : passphraseOptions.separator;
   };
 
   const generatePassphraseByWordCount = () => {
     const { wordCount, capitalize, includeNumbers, minNumberCount } = passphraseOptions;
     const separator = getCurrentSeparator();
-    
+
     let selectedWords = [];
     for (let i = 0; i < wordCount; i++) {
       const randomIndex = Math.floor(Math.random() * wordList.length);
       let word = wordList[randomIndex];
-      
       if (capitalize) {
         word = word.charAt(0).toUpperCase() + word.slice(1);
       }
-      
       selectedWords.push(word);
     }
-    
+
     let result = selectedWords.join(separator);
-    
+
     // Add numbers if needed
     if (includeNumbers) {
       const parts = result.split(separator);
       const resultParts = [];
       let numbersAdded = 0;
-      
+
       for (let i = 0; i < parts.length; i++) {
         resultParts.push(parts[i]);
-        
         if (i < parts.length - 1 && numbersAdded < minNumberCount) {
           const randomNum = Math.floor(Math.random() * 10);
           resultParts.push(randomNum.toString());
           numbersAdded++;
         }
       }
-      
       result = resultParts.join(separator);
     }
-    
+
     return result;
   };
 
   const generatePassphraseByLength = () => {
     const { targetLength, capitalize, includeNumbers, minNumberCount } = passphraseOptions;
     const separator = getCurrentSeparator();
-    
+
     let bestResult = '';
     let bestDifference = Infinity;
     const maxAttempts = 100;
-    
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let selectedWords = [];
       let currentLength = 0;
-      
+
       // Build passphrase word by word
       while (currentLength < targetLength) {
         const availableWords = wordList.filter(word => {
           const processedWord = capitalize ? word.charAt(0).toUpperCase() + word.slice(1) : word;
           const nextLength = currentLength + (selectedWords.length > 0 ? separator.length : 0) + processedWord.length;
-          
           // Reserve space for numbers if needed
           const numbersSpace = includeNumbers ? minNumberCount * (separator.length + 1) : 0;
-          
           return nextLength + numbersSpace <= targetLength;
         });
-        
+
         if (availableWords.length === 0) break;
-        
+
         const randomIndex = Math.floor(Math.random() * availableWords.length);
         let word = availableWords[randomIndex];
-        
         if (capitalize) {
           word = word.charAt(0).toUpperCase() + word.slice(1);
         }
-        
         selectedWords.push(word);
         currentLength += (selectedWords.length === 1 ? 0 : separator.length) + word.length;
       }
-      
+
       if (selectedWords.length === 0) continue;
-      
+
       let result = selectedWords.join(separator);
-      
+
       // Add numbers if needed
       if (includeNumbers && selectedWords.length > 1) {
         const parts = result.split(separator);
         const resultParts = [];
         let numbersAdded = 0;
-        
+
         for (let i = 0; i < parts.length; i++) {
           resultParts.push(parts[i]);
-          
           if (i < parts.length - 1 && numbersAdded < minNumberCount) {
             const spaceAvailable = targetLength - result.length - (minNumberCount - numbersAdded);
             if (spaceAvailable >= separator.length + 1) {
@@ -275,33 +416,29 @@ const PasswordGenerator = () => {
             }
           }
         }
-        
         result = resultParts.join(separator);
       }
-      
+
       // Check if this is closer to target length
       const difference = Math.abs(result.length - targetLength);
       if (difference < bestDifference) {
         bestResult = result;
         bestDifference = difference;
-        
         // If we hit the exact target or very close, use it
         if (difference <= 1) break;
       }
     }
-    
+
     return bestResult;
   };
 
   const generatePassphrase = () => {
     let result;
-    
     if (passphraseOptions.lengthType === 'word-count') {
       result = generatePassphraseByWordCount();
     } else {
       result = generatePassphraseByLength();
     }
-    
     setPassword(result);
   };
 
@@ -318,31 +455,19 @@ const PasswordGenerator = () => {
   };
 
   const handleOptionChange = (option) => {
-    setOptions(prev => ({
-      ...prev,
-      [option]: !prev[option]
-    }));
+    setOptions(prev => ({ ...prev, [option]: !prev[option] }));
   };
 
   const handleSymbolOptionChange = (option) => {
-    setSymbolOptions(prev => ({
-      ...prev,
-      [option]: !prev[option]
-    }));
+    setSymbolOptions(prev => ({ ...prev, [option]: !prev[option] }));
   };
 
   const handleMinCountChange = (type, value) => {
-    setMinCounts(prev => ({
-      ...prev,
-      [type]: value
-    }));
+    setMinCounts(prev => ({ ...prev, [type]: value }));
   };
 
   const handlePassphraseOptionChange = (option, value) => {
-    setPassphraseOptions(prev => ({
-      ...prev,
-      [option]: value
-    }));
+    setPassphraseOptions(prev => ({ ...prev, [option]: value }));
   };
 
   const handleCustomSymbolsChange = (e) => {
@@ -367,16 +492,15 @@ const PasswordGenerator = () => {
 
   const handleGenerate = async () => {
     setIsRefreshing(true);
-    
     // Add a small delay for visual feedback
     await new Promise(resolve => setTimeout(resolve, 200));
-    
+
     if (generationType === 'password') {
       generatePassword();
     } else {
       generatePassphrase();
     }
-    
+
     setIsRefreshing(false);
   };
 
@@ -387,9 +511,9 @@ const PasswordGenerator = () => {
       }
       return options[key];
     });
-    
+
     if (enabledTypes.length === 0) return 1;
-    
+
     const maxPossible = Math.floor(length / enabledTypes.length);
     return Math.max(1, Math.min(maxPossible, Math.floor(length * 0.8)));
   };
@@ -415,7 +539,6 @@ const PasswordGenerator = () => {
     if (generationType !== 'passphrase' || passphraseOptions.lengthType !== 'character-length' || !password) {
       return null;
     }
-    
     const difference = Math.abs(password.length - passphraseOptions.targetLength);
     const accuracy = Math.max(0, 100 - (difference * 10));
     return { difference, accuracy };
@@ -431,9 +554,8 @@ const PasswordGenerator = () => {
         }
         return options[key];
       });
-      
+
       const newMinCount = Math.max(1, Math.floor(length / enabledTypes.length));
-      
       setMinCounts(prev => ({
         ...prev,
         uppercase: options.uppercase ? newMinCount : prev.uppercase,
@@ -452,6 +574,8 @@ const PasswordGenerator = () => {
   const targetAccuracy = getTargetLengthAccuracy();
   const totalMinCount = getTotalMinCount();
   const isMinCountValid = totalMinCount <= length;
+  const strengthInfo = calculatePasswordStrength(password);
+  const entropyInfo = calculateEntropy(password);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -550,6 +674,80 @@ const PasswordGenerator = () => {
             </div>
           </div>
         </div>
+
+        {/* Password Strength Indicator */}
+        {password && (
+          <div className="mb-8">
+            <div className={`p-4 rounded-lg border ${strengthInfo.bgColor} border-opacity-50`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <FiShield className={`w-5 h-5 ${strengthInfo.color}`} />
+                  <span className="text-sm font-medium text-gray-700">Password Strength</span>
+                </div>
+                <span className={`text-sm font-bold ${strengthInfo.color}`}>
+                  {strengthInfo.level}
+                </span>
+              </div>
+              
+              {/* Strength Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    strengthInfo.score >= 80 ? 'bg-green-500' :
+                    strengthInfo.score >= 60 ? 'bg-blue-500' :
+                    strengthInfo.score >= 40 ? 'bg-yellow-500' :
+                    strengthInfo.score >= 20 ? 'bg-orange-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${strengthInfo.score}%` }}
+                ></div>
+              </div>
+
+              {/* Entropy and Crack Time Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="bg-white bg-opacity-50 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <FiCpu className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-medium text-gray-700">Entropy</span>
+                  </div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {entropyInfo.entropy} bits
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {entropyInfo.charsetSize} character set
+                  </div>
+                </div>
+                <div className="bg-white bg-opacity-50 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <FiClock className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-medium text-gray-700">Time to Crack</span>
+                  </div>
+                  <div className={`text-lg font-bold ${getCrackTimeColor(entropyInfo.crackTime)}`}>
+                    {entropyInfo.timeString}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    @ 1B guesses/sec
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback */}
+              {strengthInfo.feedback.length > 0 && (
+                <div className="space-y-1">
+                  {strengthInfo.feedback.map((item, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      {item === 'Excellent password strength!' ? (
+                        <FiCheck className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <FiAlertTriangle className="w-4 h-4 text-yellow-600" />
+                      )}
+                      <span className="text-xs text-gray-600">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Color Legend for Passwords */}
         {generationType === 'password' && password && (
@@ -778,7 +976,6 @@ const PasswordGenerator = () => {
                       Include Symbols
                     </span>
                   </label>
-
                   {options.symbols && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
@@ -803,7 +1000,6 @@ const PasswordGenerator = () => {
                               Default Symbols (!@#$%^&*...) <span className="text-red-600 font-mono">!@#</span>
                             </span>
                           </label>
-
                           {symbolOptions.useDefault && (
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
@@ -859,7 +1055,6 @@ const PasswordGenerator = () => {
                               )}
                             </button>
                           </div>
-
                           {showCustomSymbolInput && (
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
@@ -883,7 +1078,6 @@ const PasswordGenerator = () => {
                                   <FiX className="w-4 h-4" />
                                 </button>
                               </div>
-
                               {customSymbols && (
                                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                   <p className="text-xs text-blue-700 mb-1">Custom symbols:</p>
@@ -894,7 +1088,7 @@ const PasswordGenerator = () => {
                               )}
                             </motion.div>
                           )}
-
+                          
                           {/* Custom Symbols Minimum Count */}
                           {symbolOptions.useCustom && customSymbols.length > 0 && (
                             <motion.div
@@ -1054,7 +1248,6 @@ const PasswordGenerator = () => {
                   <span className="text-sm">Custom</span>
                 </button>
               </div>
-              
               <div className="grid grid-cols-5 gap-2">
                 {['-', '_', '.', ' ', 'custom'].map((sep) => (
                   <button
@@ -1070,7 +1263,6 @@ const PasswordGenerator = () => {
                   </button>
                 ))}
               </div>
-
               {(showCustomSeparatorInput || passphraseOptions.separator === 'custom') && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -1095,7 +1287,6 @@ const PasswordGenerator = () => {
                       <FiX className="w-4 h-4" />
                     </button>
                   </div>
-
                   {passphraseOptions.customSeparator && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-xs text-blue-700 mb-1">Custom separator:</p>
@@ -1120,7 +1311,6 @@ const PasswordGenerator = () => {
                   Include Numbers (mixed between words)
                 </span>
               </label>
-
               {passphraseOptions.includeNumbers && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -1184,11 +1374,10 @@ const PasswordGenerator = () => {
                       <div className="flex justify-between text-sm text-gray-600 mt-1">
                         <span>Accuracy:</span>
                         <span className={`font-mono font-medium ${
-                          targetAccuracy.difference <= 2 ? 'text-green-600' : 
+                          targetAccuracy.difference <= 2 ? 'text-green-600' :
                           targetAccuracy.difference <= 5 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
-                          {targetAccuracy.difference === 0 ? 'Perfect match!' : 
-                           `±${targetAccuracy.difference} chars`}
+                          {targetAccuracy.difference === 0 ? 'Perfect match!' : `±${targetAccuracy.difference} chars`}
                         </span>
                       </div>
                     )}
